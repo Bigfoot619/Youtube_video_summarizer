@@ -7,6 +7,8 @@ from scenedetect import VideoManager
 from scenedetect import SceneManager
 from scenedetect.detectors import ContentDetector
 from config import YOUTUBE_API_KEY
+import easyocr  # Import EasyOCR library
+
 
 def search_youtube(query):
     youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
@@ -43,6 +45,14 @@ def convert_duration(duration):
     """ Convert ISO 8601 duration to seconds """
     return isodate.parse_duration(duration).total_seconds()
 
+def createWatermark(image):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    watermark_text = "Gilad Twili"
+    text_size = cv2.getTextSize(watermark_text, font, 1, 2)[0]
+    text_x = image.shape[1] - text_size[0] - 10  # 10 pixels from the right edge
+    text_y = image.shape[0] - 10  # 10 pixels from the bottom edge
+    cv2.putText(image, watermark_text, (text_x, text_y), font, 1, (255, 0, 0), 2, cv2.LINE_AA)
+
 def find_scenes(video_path, threshold=500.0):
     # Create a video manager object for the video.
     video_manager = VideoManager([video_path])
@@ -63,7 +73,7 @@ def find_scenes(video_path, threshold=500.0):
 
     video_manager.release()
 
-def save_images(video_path, scene_list, max_images=50):
+def save_images(video_path, scene_list, max_images=5):
     # Base directory where the script is running/
     save_dir = "images"
     if not os.path.exists(save_dir):
@@ -72,14 +82,23 @@ def save_images(video_path, scene_list, max_images=50):
     video_capture = cv2.VideoCapture(video_path)
     count = 0  # Initialize counter for saved images
 
+    reader = easyocr.Reader(['en'])  # Initialize the EasyOCR reader for English
+
     for start_time, _ in scene_list:
-        if count >= max_images:
+        if count >= max_images: 
             break  # Stop if the limit is reached
 
         # Set video to start frame
         video_capture.set(cv2.CAP_PROP_POS_MSEC, start_time.get_seconds() * 1000)
         success, image = video_capture.read()
         if success:
+            # Perform OCR on the saved image
+            results = reader.readtext(image)
+            for (_ , text, _) in results:
+                print(f'{text}')
+
+            # Adding watermark to the image
+            createWatermark(image)
             filename = os.path.join(save_dir, f'frame_at_{start_time.get_seconds()}.jpg')
             cv2.imwrite(filename, image)
             count += 1  # Increment the counter after saving an image
