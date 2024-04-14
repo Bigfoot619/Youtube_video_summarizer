@@ -6,10 +6,10 @@ import isodate
 from scenedetect import VideoManager
 from scenedetect import SceneManager
 from scenedetect.detectors import ContentDetector
+from config import YOUTUBE_API_KEY
 
 def search_youtube(query):
-    api_key = 'AIzaSyBmBi6ZZXWmIDOqkAZBPQrXXSvBD-hKELA'  # Replace this with your actual YouTube Data API v3 key
-    youtube = build('youtube', 'v3', developerKey=api_key)
+    youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
     request = youtube.search().list(
         q=query,
         part='snippet',
@@ -43,7 +43,7 @@ def convert_duration(duration):
     """ Convert ISO 8601 duration to seconds """
     return isodate.parse_duration(duration).total_seconds()
 
-def find_scenes(video_path, threshold=30.0):
+def find_scenes(video_path, threshold=500.0):
     # Create a video manager object for the video.
     video_manager = VideoManager([video_path])
     scene_manager = SceneManager()
@@ -63,7 +63,7 @@ def find_scenes(video_path, threshold=30.0):
 
     video_manager.release()
 
-def save_images(video_path, scene_list, max_images=10):
+def save_images(video_path, scene_list, max_images=50):
     # Base directory where the script is running/
     save_dir = "images"
     if not os.path.exists(save_dir):
