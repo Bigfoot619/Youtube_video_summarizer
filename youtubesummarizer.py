@@ -1,5 +1,6 @@
 import cv2
 import os
+import imageio
 from pytube import YouTube
 from googleapiclient.discovery import build
 import isodate
@@ -8,6 +9,9 @@ from scenedetect import SceneManager
 from scenedetect.detectors import ContentDetector
 from config import YOUTUBE_API_KEY
 import easyocr  # Import EasyOCR library
+from IPython.display import Image, display
+import PySimpleGUI as sg
+
 
 
 def search_youtube(query):
@@ -53,7 +57,7 @@ def createWatermark(image):
     text_y = image.shape[0] - 10  # 10 pixels from the bottom edge
     cv2.putText(image, watermark_text, (text_x, text_y), font, 1, (255, 0, 0), 2, cv2.LINE_AA)
 
-def find_scenes(video_path, threshold=500.0):
+def find_scenes(video_path, threshold):
     # Create a video manager object for the video.
     video_manager = VideoManager([video_path])
     scene_manager = SceneManager()
@@ -61,29 +65,34 @@ def find_scenes(video_path, threshold=500.0):
     # Add ContentDetector algorithm (with a threshold).
     scene_manager.add_detector(ContentDetector(threshold=threshold))
 
-    # Start the video manager and perform scene detection.
-    video_manager.start()
-    scene_manager.detect_scenes(frame_source=video_manager)
+    try:
+        # Start the video manager and perform scene detection.
+        video_manager.start()
+        scene_manager.detect_scenes(frame_source=video_manager)
 
-    # Obtain list of detected scenes.
-    scene_list = scene_manager.get_scene_list()
+        # Obtain list of detected scenes.
+        scene_list = scene_manager.get_scene_list(base_timecode=video_manager.get_base_timecode())  # Ensure this is set correctly
 
-    # We can save the scenes as images:
-    save_images(video_path, scene_list)
+        return scene_list  # Make sure to return the scene list
+    finally:
+        video_manager.release()  # Ensure video manager is released even if an error occurs
 
-    video_manager.release()
-
-def save_images(video_path, scene_list, max_images=5):
+def save_images(video_path, scene_list, max_images=4):
     # Base directory where the script is running/
     save_dir = "images"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)  # Create the directory if it doesn't exist
 
+    image_files = []  # List to hold image paths for GIF creation
     video_capture = cv2.VideoCapture(video_path)
     count = 0  # Initialize counter for saved images
 
+    if scene_list is None or not scene_list:
+        print("No scenes detected.")
+        return image_files  # Return empty list if no scenes are detected
+    
     reader = easyocr.Reader(['en'])  # Initialize the EasyOCR reader for English
-
+    
     for start_time, _ in scene_list:
         if count >= max_images: 
             break  # Stop if the limit is reached
@@ -101,16 +110,31 @@ def save_images(video_path, scene_list, max_images=5):
             createWatermark(image)
             filename = os.path.join(save_dir, f'frame_at_{start_time.get_seconds()}.jpg')
             cv2.imwrite(filename, image)
+            image_files.append(filename)
             count += 1  # Increment the counter after saving an image
 
     video_capture.release()  # Make sure to release the video capture object
+    return image_files
 
 def download_and_detect_scenes(video_id, title):
     yt = YouTube(f'https://www.youtube.com/watch?v={video_id}')
     stream = yt.streams.filter(file_extension='mp4').first()
     video_path = stream.download()
     print(f'Downloaded {title}')
-    find_scenes(video_path, threshold=27)  # You can adjust the threshold based on testing.
+    scene_list = find_scenes(video_path, threshold=27)
+    image_files = save_images(video_path, scene_list)
+    process_and_display_gif(image_files)
+
+def create_gif(image_files, output_path='output.gif'):
+    with imageio.get_writer(output_path, mode='I', duration=0.5) as writer:
+        for image_file in image_files:
+            image = imageio.imread(image_file)
+            writer.append_data(image)
+    return output_path
+
+def process_and_display_gif(image_files):
+    gif_path = create_gif(image_files)
+    display(Image(filename=gif_path))
 
 def main():
     subject = input("Please enter a subject for the video: ")
