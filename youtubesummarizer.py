@@ -66,13 +66,14 @@ def find_scenes(video_path, threshold):
     finally:
         video_manager.release()
 
-def save_images(video_path, scene_list, max_images=10):
+def save_images(video_path, scene_list, max_images=100):
     save_dir = "images"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     image_files = []
     video_capture = cv2.VideoCapture(video_path)
     count = 0
+    text_accumulator = ""  # Initialize text accumulator
     reader = easyocr.Reader(['en'])
     for start_time, _ in scene_list:
         if count >= max_images:
@@ -82,14 +83,15 @@ def save_images(video_path, scene_list, max_images=10):
         if success:
             results = reader.readtext(image)
             for (_, text, _) in results:
-                print(f'{text}')
+                text_accumulator += text + " "  # Append text with a space
             createWatermark(image)
             filename = os.path.join(save_dir, f'frame_at_{start_time.get_seconds()}.jpg')
             cv2.imwrite(filename, image)
             image_files.append(filename)
             count += 1
     video_capture.release()
-    return image_files
+    print("Accumulated text from frames:", text_accumulator)
+    return image_files, text_accumulator
 
 def download_and_detect_scenes(video_id, title):
     yt = YouTube(f'https://www.youtube.com/watch?v={video_id}')
@@ -97,12 +99,14 @@ def download_and_detect_scenes(video_id, title):
     video_path = stream.download()
     print(f'Downloaded {title}')
     scene_list = find_scenes(video_path, threshold=27)
-    image_files = save_images(video_path, scene_list)
+    image_files, detected_text = save_images(video_path, scene_list)
     process_and_display_gif(image_files)
+    return detected_text  # Return the accumulated text for further use or display
 
 def create_gif(image_files, output_path='output.gif'):
-    with imageio.get_writer(output_path, mode='I', duration=0.1) as writer:  # Set a shorter frame duration
-        for image_file in image_files:
+    # Limit the number of images to 100 to ensure the GIF is no longer than 10 seconds at 0.1s per frame
+    with imageio.get_writer(output_path, mode='I', duration=0.1) as writer:
+        for image_file in image_files[:100]:  # Only take the first 100 images
             image = imageio.imread(image_file)
             writer.append_data(image)
     return output_path
@@ -118,7 +122,8 @@ def process_and_display_gif(image_files):
     # Display each frame in the GIF
     while True:
         for frame in gif:
-            imgbytes = cv2.imencode('.png', frame)[1].tobytes()  # Convert image to bytes
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            imgbytes = cv2.imencode('.png', frame_rgb)[1].tobytes()
             window['-IMAGE-'].update(data=imgbytes)
             event, values = window.read(timeout=frame_duration)
             if event == sg.WIN_CLOSED:
@@ -137,7 +142,8 @@ def main():
     video_id, title, duration, views = search_youtube(subject)
     if video_id:
         sg.popup(f'Top video: {title} ({duration} seconds, {views} views)')
-        download_and_detect_scenes(video_id, title)
+        detected_text = download_and_detect_scenes(video_id, title)
+        sg.popup(f"Detected Text: {detected_text}")  # Display detected text in a popup
     else:
         sg.popup("No suitable video found.")
 
