@@ -10,7 +10,6 @@ from scenedetect.detectors import ContentDetector
 from config import YOUTUBE_API_KEY
 import easyocr
 import PySimpleGUI as sg
-import time
 
 def search_youtube(query):
     youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
