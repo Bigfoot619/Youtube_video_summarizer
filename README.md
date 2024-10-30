@@ -41,7 +41,7 @@ YOUTUBE_API_KEY = 'your_youtube_api_key_here'
 Run the script using Python:
 
 ```bash
-python main.py
+python youtubesummarizer.py
 ```
 
 Upon launching, the application will prompt you to enter a search query. After processing, it will display the most relevant video's GIF along with extracted texts from the scenes.
